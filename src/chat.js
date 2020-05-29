@@ -1,6 +1,7 @@
 import React from 'react';
 import { withRouter } from 'react-router-dom'
 import socketIOClient from "socket.io-client";
+import VideoChat from './videochat'
 import axios from 'axios'
 
 axios.defaults.baseURL = "http://localhost:5000"
@@ -8,6 +9,7 @@ axios.defaults.headers.common = {
   "Content-Type": "application/json"
 }
 const ENDPOINT = "http://127.0.0.1:5000";
+const socket = socketIOClient(ENDPOINT)
 
 class Chat extends React.Component{
   constructor(props){
@@ -15,6 +17,7 @@ class Chat extends React.Component{
     this.state = {
       messages: [],
       message: "",
+      videoChat: undefined,
     }
   }
 
@@ -46,7 +49,7 @@ class Chat extends React.Component{
     },() => console.log(this.state))
     this.getMessages();
     this.getUsers();
-    const socket = socketIOClient(ENDPOINT)
+
     socket.on("message", message => {
       this.updateMessages(message)
     })
@@ -55,6 +58,15 @@ class Chat extends React.Component{
       this.setState({
         users: users
       }, () => console.log(this.state))
+    })
+    socket.on("PCSignalingOffer", content =>{
+      console.log("WELL<JFDSAF")
+      if(content.to === this.state.user){
+        content.calling = false
+        this.setState({
+          videoChat: content
+        }, () => console.log(this.state))
+    }
     })
   }
   componentDidUpdate() {
@@ -78,11 +90,40 @@ class Chat extends React.Component{
             console.log("message sent")
           })
   }
+  sendSignalingMessage = (content) => {
+    console.log(content)
+    if(content.type === "offer"){
+      socket.emit("PCSignalingOffer", content)
+    } else if (content.type === "answer") {
+      socket.emit(socket.emit("PCSignalingAnswer", content))
+    }
+  }
+
+  sendIceCandidate = (content) => {
+    console.log("yuuuup")
+    console.log(content)
+    socket.emit("IceCandidate", content)
+  }
+
   key = (e) => {
     if(e.keyCode== 13){
       this.sendMessage()
     }
   }
+
+  sendCall = (e) => {
+    let videoChat = {
+      desc: undefined,
+      to: "Sabrina",
+      from: this.state.username,
+      room: "main",
+      calling: true,
+    }
+    this.setState({
+      videoChat: videoChat
+    })
+  }
+
   render(){
     return(
       <div>
@@ -98,8 +139,11 @@ class Chat extends React.Component{
           </div>
           <div>
             <input onChange={e => this.setState({message: e.target.value})} onKeyDown={this.key} value={this.state.message}/>
-            <button onClick={this.sendMessage} onEnter={this.sendMessage}>Send</button>
+            <button onClick={this.sendMessage}>Send</button>
+            <button onClick={this.sendCall}>Call</button>
           </div>
+          {this.state.user && this.state.videoChat && <VideoChat user={this.state.user} sendSignalingMessage={this.sendSignalingMessage}
+                                sendIceCandidate={this.sendIceCandidate} socket={socket} videoChat={this.state.videoChat}/>}
       </div>
     )
   }
